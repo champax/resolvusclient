@@ -1,0 +1,15 @@
+# PYPI :
+# workon pysolbase
+# python setup.py sdist && twine upload dist/*; rm -rf './dist'; rm -rf pysol*.egg-info; echo "OVER"
+
+# gevent stack
+greenlet
+gevent
+
+# date
+pytz
+
+# pysol
+pysolbase
+pysolmeters
+
