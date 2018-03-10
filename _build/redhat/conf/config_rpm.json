@@ -1,0 +1,59 @@
+{
+  "extensions": {
+    "enabled": [
+      "python_venv",
+      "file_extras",
+      "file_permissions",
+      "blocks"
+    ]
+  },
+  "core": {
+    "group": "Application/System",
+    "license": "GPL",
+    "name": "resolvusclient",
+    "summary": "Resolvus client",
+    "url": "https://knock.center",
+    "version": "1.0.0",
+    "release": "BUILD_NUMBER",
+    "requires": ["python"]
+  },
+  "blocks": {
+    "desc": [
+      "Resolvus client",
+      "https://knock.center"
+    ],
+    "pre": [],
+    "post": []
+  },
+  "python_venv": {
+    "cmd": "virtualenv",
+    "flags": [
+      "--always-copy"
+    ],
+    "name": "resolvusclient",
+    "path": "/opt",
+    "python": "/opt/Python-2.7.13/bin/python2.7",
+    "requirements": [
+      "requirements.txt"
+    ]
+  },
+  "file_extras": {
+    "files": [
+      {
+        "src": "redhat/conf/opt/",
+        "dest": "/opt"
+      },
+      {
+        "src": "additional_lib/",
+        "dest": "/opt/resolvusclient/lib/python2.7/"
+      }
+    ]
+  },
+  "file_permissions": {
+    "user": "root",
+    "group": "root",
+    "create_user": false,
+    "create_group": false
+  }
+}
+

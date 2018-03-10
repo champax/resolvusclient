@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+
+# Ignore some files
+# export DH_ALWAYS_EXCLUDE=PYC:.pyc
+
+# Fix dh-virtualenv 1.0 install in /opt/venvs
+export DH_VIRTUALENV_INSTALL_ROOT=/opt/
+
+%:
+	dh $@ --with python-virtualenv --preinstall pip --with=systemd
+
+override_dh_installinit:
+	dh_installinit  --name=resolvusclient -- defaults 91 09

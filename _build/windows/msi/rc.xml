@@ -1,0 +1,154 @@
+<?xml version="1.0"?>
+
+<!-- VARS, XmlHighlighting -->
+<?define ProductVersion = "0.1.555.0"?>
+<?define ProductUpgradeCode = "40a4641e-56fe-4272-831a-d2711ae73c61"?>
+
+<!-- DO NOT REGEN GUID PLZ, XmlHighlighting -->
+<?define GUID1 = "40a4641e-56fe-4272-831a-d2711ae73c61"?>
+<?define GUID2 = "ff96f0ba-9693-4492-ba12-51386f689cd5"?>
+<?define GUID3 = "8842c2c2-13c2-417f-a639-5862a3e3edf8"?>
+
+<!-- XML, XmlHighlighting -->
+<!--suppress ALL -->
+<Wix xmlns:util="http://schemas.microsoft.com/wix/UtilExtension" xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+    <Product Id="*" UpgradeCode="$(var.ProductUpgradeCode)" Name="Resolvus client" Version="$(var.ProductVersion)" Manufacturer="Knock SAS" Language="1033">
+        <Package InstallerVersion="200" Compressed="yes" Comments="Resolvus client - Windows Installer Package">
+
+        </Package>
+        <Media Id="1" Cabinet="product.cab" EmbedCab="yes"/>
+        <Icon Id="ProductIcon" SourceFile="..\pyinstaller\dist\k_logo.ico"/>
+        <Property Id="ARPPRODUCTICON" Value="ProductIcon"/>
+        <Property Id="ARPHELPLINK" Value="https://knock.center"/>
+        <Property Id="ARPURLINFOABOUT" Value="https://knock.center"/>
+        <!-- <Property Id="ARPNOREPAIR" Value="yes" Secure="yes" /> -->
+        <!-- <Property Id="ARPNOREMOVE" Value="yes" Secure="yes" /> -->
+        <Property Id="ARPNOMODIFY" Value="yes" Secure="yes"/>
+        <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="Thank you for installing Resolvus client."/>
+        <Upgrade Id="$(var.ProductUpgradeCode)">
+            <UpgradeVersion Minimum="$(var.ProductVersion)" OnlyDetect="yes" Property="NEWERVERSIONDETECTED"/>
+            <UpgradeVersion Minimum="0.0.0" Maximum="$(var.ProductVersion)" IncludeMinimum="yes" IncludeMaximum="no" Property="OLDERVERSIONBEINGUPGRADED"/>
+        </Upgrade>
+        <Condition Message="A newer version of this software is already installed.">NOT NEWERVERSIONDETECTED</Condition>
+
+        <!-- PUSH TO TARGETDIR, ProgramFilesFolder, resolvusclient -->
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFilesFolder">
+                <Directory Id="RCLIDIR" Name="resolvusclient">
+                    <!-- ROOT DIR -->
+                    <Component Id="resolvusclientFiles" Guid="$(var.GUID1)">
+                        <!-- SERVICE FILE -->
+                        <File Id="RC_exe" Source="..\pyinstaller\dist\resolvusclient.exe"/>
+
+                        <!-- SERVICE GO -->
+                        <ServiceInstall
+                                Id="ServiceInstaller"
+                                Type="ownProcess"
+                                Name="resolvusclient"
+                                DisplayName="resolvusclient"
+                                Description="Resolvus client"
+                                Start="auto"
+                                Account="[SERVICEACCOUNT]"
+                                Password="[SERVICEPASSWORD]"
+                                ErrorControl="normal"
+                        >
+                            <ServiceConfig
+                                    DelayedAutoStart="no"
+                                    OnInstall="yes"
+                                    OnReinstall="yes"/>
+                            <util:ServiceConfig
+                                    FirstFailureActionType='restart'
+                                    SecondFailureActionType='restart'
+                                    ThirdFailureActionType='restart'
+                                    RestartServiceDelayInSeconds='10'
+                                    ResetPeriodInDays='1'/>
+                        </ServiceInstall>
+                        <ServiceControl Id="StartService" Start="install" Stop="both" Remove="both" Name="resolvusclient" Wait="yes">
+                        </ServiceControl>
+
+                        <!-- OTHER FILES -->
+                        <File Id="RC_ico" Source="..\pyinstaller\dist\k_logo.ico"/>
+                        <File Id="RC_png" Source="..\pyinstaller\dist\k_logo.png"/>
+                        <File Id="RC_pyd" Source="..\pyinstaller\dist\win32evtlog.pyd"/>
+                    </Component>
+                </Directory>
+            </Directory>
+
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="ProgramMenuSubfolder" Name="Knock">
+                    <Component Id="resolvusclientShortcuts" Guid="$(var.GUID3)">
+                        <Shortcut Id="KDS_1" Name="Resolvusclient shortcut" Description="Resolvus client" Target="[RCLIDIR]resolvusclient.exe" WorkingDirectory="RCLIDIR"/>
+                        <RegistryValue Root="HKCU" Key="Software\resolvusclient" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+                        <RemoveFolder Id="ProgramMenuSubfolder" On="uninstall"/>
+                    </Component>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <InstallExecuteSequence>
+            <RemoveExistingProducts After="InstallValidate"/>
+        </InstallExecuteSequence>
+
+        <Feature Id="DefaultFeature" Level="1">
+            <ComponentRef Id="resolvusclientFiles"/>
+            <ComponentRef Id="resolvusclientCustomConfigurationFiles"/>
+            <ComponentRef Id="resolvusclientShortcuts"/>
+        </Feature>
+
+        <UI Id="KUI">
+            <!-- =========================== -->
+            <!-- COMMON -->
+            <!-- =========================== -->
+            <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8"/>
+            <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12"/>
+            <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes"/>
+
+            <Property Id="DefaultUIFont" Value="WixUI_Font_Normal"/>
+            <Property Id="WixUI_Mode" Value="Mondo"/>
+
+            <DialogRef Id="ErrorDlg"/>
+            <DialogRef Id="FatalError"/>
+            <DialogRef Id="FilesInUse"/>
+            <DialogRef Id="MsiRMFilesInUse"/>
+            <DialogRef Id="PrepareDlg"/>
+            <DialogRef Id="ProgressDlg"/>
+            <DialogRef Id="ResumeDlg"/>
+            <DialogRef Id="UserExit"/>
+            <DialogRef Id="UserRegDialog"/>
+
+            <!--    FLOW
+                    Already installed   : WelcomeDlg => MaintenanceWelcomeDlg => MaintenanceTypeDlg => VerifyReadyDlg
+                    Not installed       : WelcomeDlg => LicenseAgreementDlg => UserRegDialog => MaintenanceTypeDlg => VerifyReadyDlg
+            -->
+
+            <!-- WELCOME -->
+            <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="UserRegDialog" Order="2">NOT Installed</Publish>
+            <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceWelcomeDlg" Order="2">Installed</Publish>
+
+            <!-- ALREADY INSTALLED / WELCOME -->
+            <Publish Dialog="MaintenanceWelcomeDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
+            <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg">1</Publish>
+
+            <!-- ALREADY INSTALLED / DETAILS -->
+            <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg">1</Publish>
+            <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+            <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+
+            <!-- CUSTOM INPUT -->
+            <Publish Dialog="UserRegDialog" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="1">NOT Installed</Publish>
+            <Publish Dialog="UserRegDialog" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="1">Installed</Publish>
+            <Publish Dialog="UserRegDialog" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+
+            <!-- VERIFY -->
+            <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="UserRegDialog" Order="1">NOT Installed</Publish>
+            <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="1">Installed</Publish>
+
+            <!-- EXIT -->
+            <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
+        </UI>
+        <UIRef Id="WixUI_Common"/>
+
+    </Product>
+
+</Wix>

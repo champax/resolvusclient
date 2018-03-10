@@ -1,0 +1,5 @@
+resolvusclient (0.1.1-BUILD_NUMBER) testing; urgency=low
+
+  * Initial release.
+
+ -- Knock SAS (GPG sign package key) <debian@knock.center>

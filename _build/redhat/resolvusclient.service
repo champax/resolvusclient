@@ -1,0 +1,16 @@
+[Unit]
+Description=Resolvus client
+After=tlp-init.service
+
+[Service]
+Type=forking
+RemainAfterExit=no
+ExecStart=/opt/resolvusclient/bin/python /opt/resolvusclient/bin/resolvusclient -pidfile=/var/run/resolvusclient.pid -stderr=/var/log/resolvusclient.err -stdout=/dev/null -logfile=/var/log/resolvusclient.log -loglevel=INFO -maxopenfiles=4096 -user=root -c=/etc/resolvusclient/resolvusclient.yaml start
+ExecStop=/opt/resolvusclient/bin/python /opt/resolvusclient/bin/resolvusclient -pidfile=/var/run/resolvusclient.pid -stderr=/var/log/resolvusclient.err -stdout=/dev/null -logfile=/var/log/resolvusclient.log -loglevel=INFO -maxopenfiles=4096 -user=root -c=/etc/resolvusclient/resolvusclient.yaml stop
+Restart=always
+RestartSec=5
+# Need PIDFile, otherwise redhat restart in loop
+PIDFile=/var/run/resolvusclient.pid
+
+[Install]
+WantedBy=multi-user.target
