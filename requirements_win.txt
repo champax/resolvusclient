@@ -12,6 +12,10 @@ pytz
 # pysol
 # pysolbase
 # pysolmeters
+# pysoltcp
 git+https://github.com/champax/pysolbase.git@py3#egg=pysolbase
 git+https://github.com/champax/pysolmeters.git@py3#egg=pysolmeters
+git+https://github.com/champax/pysoltcp.git@py3#egg=pysoltcp
 
+# dns
+dnslib

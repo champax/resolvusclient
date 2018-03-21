@@ -26,38 +26,36 @@ import socket
 
 import gevent
 import os
+from dnslib import DNSRecord
 from gevent.server import DatagramServer
 from pysolbase.SolBase import SolBase
 from pysolmeters.Meters import Meters
-
-from resolvusclient.Helpers.SocketHelpers import SocketHelpers
+from pysoltcp.tcpbase.TcpSocketManager import TcpSocketManager
 
 logger = logging.getLogger(__name__)
 
 
-# noinspection PyMethodMayBeStatic
 class UdpServer(DatagramServer):
     """
     Udp server
     """
 
     UDP_SOCKET_HOST = "localhost"
-    UDP_SOCKET_PORT = "53"
+    UDP_SOCKET_PORT = 53
 
     UDP_UNITTEST_SOCKET_HOST = "localhost"
-    UDP_UNITTEST_SOCKET_PORT = "63053"
+    UDP_UNITTEST_SOCKET_PORT = 63053
 
-    def __init__(self, listen_host=None, listen_port=None, *args, **kwargs):
+    def __init__(self, listen_host=None, listen_port=None, ut_callback=None, *args, **kwargs):
         """
         Init
         :param listen_host: str,None
         :type listen_host: str,None
         :param listen_port: int,None
         :type listen_port: int,None
+        :param ut_callback: callable,None. UNITTEST ONLY.
+        :type ut_callback: callable,None
         """
-
-        # Call base
-        DatagramServer.__init__(self, *args, **kwargs)
 
         # UNITTEST
         if "KNOCK_UNITTEST" in os.environ:
@@ -73,12 +71,24 @@ class UdpServer(DatagramServer):
         if not self.listen_port:
             self.listen_port = UdpServer.UDP_SOCKET_PORT
 
+        # Store
+        self.ut_callback = ut_callback
+
         # Log
         logger.info("Using listen_host=%s, listen_port=%s", self.listen_host, self.listen_port)
+        logger.info("Using ut_callback=%s", self.ut_callback)
 
         # Init
         self._is_started = False
         self._server_greenlet = None
+        self._soc = None
+
+        # Allocate socket and bind it
+        self._create_socket_and_bind()
+
+        # Call base
+        logger.info("Calling base")
+        DatagramServer.__init__(self, self._soc, *args, **kwargs)
 
     def start(self):
         """
@@ -89,8 +99,8 @@ class UdpServer(DatagramServer):
             logger.warning("Already started, bypass")
             return
 
-            # Base start
-        logger.info("Starting")
+        # Base start
+        logger.info("Starting (spawn start)")
 
         # Spawn async toward base
         self._server_greenlet = gevent.spawn(DatagramServer.start, self)
@@ -120,9 +130,11 @@ class UdpServer(DatagramServer):
             self._server_greenlet = None
 
         # Close socket
-        SocketHelpers.safe_close_socket(self._soc)
+        logger.info("Closing socket")
+        TcpSocketManager.safe_close_socket(self._soc)
 
         # Signal stopped
+        logger.info("Stopped")
         self._is_started = False
 
     def _create_socket_and_bind(self):
@@ -168,7 +180,7 @@ class UdpServer(DatagramServer):
         """
         Handle one udp message
         :param data: data
-        :type data: str
+        :type data: bytes
         :param address: address
         :type address: str
         """
@@ -176,7 +188,7 @@ class UdpServer(DatagramServer):
         ms_start = SolBase.mscurrent()
         try:
             # Handle data
-            pass
+            self._handle_udp(data)
 
             # Stats
             Meters.aii("resolvusclient_udp_recv")
@@ -188,3 +200,28 @@ class UdpServer(DatagramServer):
             Meters.aii("resolvusclient_udp_recv_ex")
         finally:
             Meters.dtci("resolvusclient_udp_recv_dtc", SolBase.msdiff(ms_start))
+
+    # ------------------------------
+    # UDP HANDLING
+    # ------------------------------
+
+    def _handle_udp(self, data):
+        """
+        Handle one udp message
+        :param data: data
+        :type data: bytes
+        """
+
+        # Log
+        logger.info("Processing, data=%s", repr(data))
+
+        # Unittest
+        if self.ut_callback:
+            b = self.ut_callback(data)
+            if b:
+                # Unittest has requested processing stop
+                return
+
+        # Parse
+        d = DNSRecord.parse(data)
+        logger.info("Got d=%s", d)
