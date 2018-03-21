@@ -2,3 +2,4 @@ unittest-xml-reporting
 nosexcover
 pylint
 twine
+tox

@@ -31,7 +31,6 @@ from pysolbase.SolBase import SolBase
 from pysolmeters.Meters import Meters
 
 from resolvusclient.Helpers.SocketHelpers import SocketHelpers
-from resolvusclient.Platform.PlatformTools import PlatformTools
 
 logger = logging.getLogger(__name__)
 
@@ -42,73 +41,44 @@ class UdpServer(DatagramServer):
     Udp server
     """
 
-    # --------------------------
-    # UNIX DOMAIN SOCKET
-    # --------------------------
-    UDP_SOCKET_NAME = "/var/run/resolvusclient.udp.socket"
-    UDP_UNITTEST_SOCKET_NAME = "/tmp/resolvusclient.udp.socket"
+    UDP_SOCKET_HOST = "localhost"
+    UDP_SOCKET_PORT = "53"
 
-    # --------------------------
-    # WINDOWS SOCKET (WINDOWS ONLY)
-    # --------------------------
-    UDP_WINDOWS_SOCKET_HOST = "localhost"
-    UDP_WINDOWS_SOCKET_PORT = "63184"
+    UDP_UNITTEST_SOCKET_HOST = "localhost"
+    UDP_UNITTEST_SOCKET_PORT = "63053"
 
-    UDP_WINDOWS_UNITTEST_SOCKET_HOST = "localhost"
-    UDP_WINDOWS_UNITTEST_SOCKET_PORT = "63999"
-
-    def __init__(self, socket_name=None, windows_host=None, windows_port=None, *args, **kwargs):
+    def __init__(self, listen_host=None, listen_port=None, *args, **kwargs):
         """
         Init
-        :param socket_name: str,None
-        :type socket_name: str,None
-        :param windows_host: str,None
-        :type windows_host: str,None
-        :param windows_port: int,None
-        :type windows_port: int,None
+        :param listen_host: str,None
+        :type listen_host: str,None
+        :param listen_port: int,None
+        :type listen_port: int,None
         """
 
         # Call base
         DatagramServer.__init__(self, *args, **kwargs)
 
-        # NAME
-        if socket_name:
-            self._socket_name = socket_name
+        # UNITTEST
+        if "KNOCK_UNITTEST" in os.environ:
+            self.listen_host = UdpServer.UDP_UNITTEST_SOCKET_HOST
+            self.listen_port = UdpServer.UDP_UNITTEST_SOCKET_PORT
         else:
-            # If UNITTEST, force
-            if "KNOCK_UNITTEST" in os.environ:
-                self._socket_name = UdpServer.UDP_UNITTEST_SOCKET_NAME
-            else:
-                self._socket_name = UdpServer.UDP_SOCKET_NAME
+            self.listen_host = listen_host
+            self.listen_port = listen_port
 
-        # WINDOWS HOST
-        if windows_host:
-            self._windows_host = windows_host
-        else:
-            # If UNITTEST, force
-            if "KNOCK_UNITTEST" in os.environ:
-                self._windows_host = UdpServer.UDP_WINDOWS_UNITTEST_SOCKET_HOST
-            else:
-                self._windows_host = UdpServer.UDP_WINDOWS_SOCKET_HOST
+        # Default
+        if not self.listen_host:
+            self.listen_host = UdpServer.UDP_SOCKET_HOST
+        if not self.listen_port:
+            self.listen_port = UdpServer.UDP_SOCKET_PORT
 
-        # WINDOWS PORT
-        if windows_port:
-            self._windows_port = windows_port
-        else:
-            # If UNITTEST, force
-            if "KNOCK_UNITTEST" in os.environ:
-                self._windows_port = UdpServer.UDP_WINDOWS_UNITTEST_SOCKET_PORT
-            else:
-                self._windows_port = UdpServer.UDP_WINDOWS_SOCKET_PORT
+        # Log
+        logger.info("Using listen_host=%s, listen_port=%s", self.listen_host, self.listen_port)
 
         # Init
         self._is_started = False
         self._server_greenlet = None
-
-        # Logs
-        logger.info("_socket_name=%s", self._socket_name)
-        logger.info("_windows_host=%s", self._windows_host)
-        logger.info("_windows_port=%s", self._windows_port)
 
     def start(self):
         """
@@ -116,7 +86,7 @@ class UdpServer(DatagramServer):
         """
 
         if self._is_started:
-            logger.warn("Already started, bypass")
+            logger.warning("Already started, bypass")
             return
 
             # Base start
@@ -135,7 +105,7 @@ class UdpServer(DatagramServer):
         """
 
         if not self._is_started:
-            logger.warn("Not started, bypass")
+            logger.warning("Not started, bypass")
             return
 
         # Base stop
@@ -152,13 +122,6 @@ class UdpServer(DatagramServer):
         # Close socket
         SocketHelpers.safe_close_socket(self._soc)
 
-        # Remove socket
-        try:
-            if os.path.exists(self._socket_name):
-                os.remove(self._socket_name)
-        except Exception as e:
-            logger.warn("Socket file remove ex=%s", SolBase.extostr(e))
-
         # Signal stopped
         self._is_started = False
 
@@ -172,40 +135,16 @@ class UdpServer(DatagramServer):
             return
 
         # Listen
-        logger.info("Binding")
+        logger.info("Binding on %s:%s", self.listen_host, self.listen_port)
 
         # Alloc
-        if PlatformTools.get_distribution_type() == "windows":
-            # ==========================
-            # Ahah, no support for domain socket on Windows
-            # ==========================
-            # Will not go for pipes
-            # So we target local host (dirty)
-            logger.warn("Windows detected, using UDP toward %s:%s (lacks of domain socket support)", self._windows_host, self._windows_port)
-            logger.warn("You may (will) experience performance issues over the UDP channel (possible lost of packets)")
-            logger.warn("If you are using client library, please be sure to NOT target the unix domain socket on this machine.")
-            self._soc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._soc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-            # Switch to non blocking
-            self._soc.setblocking(0)
+        # Switch to non blocking
+        self._soc.setblocking(0)
 
-            # Bind
-            self._soc.bind((self._windows_host, self._windows_port))
-        else:
-            # ==========================
-            # Linux rocks (and debian rocks more)
-            # ==========================
-
-            # Alloc
-            self._soc = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-            if os.path.exists(self._socket_name):
-                os.remove(self._socket_name)
-
-            # Switch to non blocking
-            self._soc.setblocking(0)
-
-            # Bind
-            self._soc.bind(self._socket_name)
+        # Bind
+        self._soc.bind((self.listen_host, self.listen_port))
 
         # Logs
         logger.info("Recv buf=%s", self._soc.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF))
