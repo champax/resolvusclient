@@ -40,21 +40,31 @@ class UdpServer(DatagramServer):
     Udp server
     """
 
-    UDP_SOCKET_HOST = "localhost"
+    UDP_SOCKET_HOST = "0.0.0.0"
     UDP_SOCKET_PORT = 53
 
-    UDP_UNITTEST_SOCKET_HOST = "localhost"
+    UDP_UNITTEST_SOCKET_HOST = "0.0.0.0"
     UDP_UNITTEST_SOCKET_PORT = 63053
 
-    def __init__(self, listen_host=None, listen_port=None, ut_callback=None, *args, **kwargs):
+    DEFAULT_RESOLVERS = ["8.8.8.8"]
+
+    def __init__(self,
+                 listen_host=None, listen_port=None,
+                 ar_resolvers=None,
+                 resolve_timeout_ms=10000,
+                 ut_incoming_callback=None, ut_outgoing_callback=None, *args, **kwargs):
         """
         Init
         :param listen_host: str,None
         :type listen_host: str,None
         :param listen_port: int,None
         :type listen_port: int,None
-        :param ut_callback: callable,None. UNITTEST ONLY.
-        :type ut_callback: callable,None
+        :param ar_resolvers: List of resolver hosts
+        :type ar_resolvers: list,None
+        :param ut_incoming_callback: callable,None. UNITTEST ONLY.
+        :type ut_incoming_callback: callable,None
+        :param ut_outgoing_callback: callable,None. UNITTEST ONLY.
+        :type ut_outgoing_callback: callable,None
         """
 
         # UNITTEST
@@ -71,12 +81,22 @@ class UdpServer(DatagramServer):
         if not self.listen_port:
             self.listen_port = UdpServer.UDP_SOCKET_PORT
 
+        # Resolvers
+        self.ar_resolvers = ar_resolvers
+        if not self.ar_resolvers:
+            self.ar_resolvers = UdpServer.DEFAULT_RESOLVERS
+
         # Store
-        self.ut_callback = ut_callback
+        self.resolve_timeout_ms = resolve_timeout_ms
+        self.ut_incoming_callback = ut_incoming_callback
+        self.ut_outgoing_callback = ut_outgoing_callback
 
         # Log
         logger.info("Using listen_host=%s, listen_port=%s", self.listen_host, self.listen_port)
-        logger.info("Using ut_callback=%s", self.ut_callback)
+        logger.info("Using ar_resolvers=%s", ar_resolvers)
+        logger.info("Using resolve_timeout_ms=%s", resolve_timeout_ms)
+        logger.info("Using ut_incoming_callback=%s", self.ut_incoming_callback)
+        logger.info("Using ut_outgoing_callback=%s", self.ut_outgoing_callback)
 
         # Init
         self._is_started = False
@@ -178,7 +198,8 @@ class UdpServer(DatagramServer):
 
     def handle(self, data, address):
         """
-        Handle one udp message
+        Handle one udp message.
+        This is called via spawn, so we are free to be slow.
         :param data: data
         :type data: bytes
         :param address: address
@@ -187,6 +208,7 @@ class UdpServer(DatagramServer):
 
         ms_start = SolBase.mscurrent()
         try:
+            logger.info("Incoming, address=%s, data=%s", address, repr(data))
             # Handle data
             self._handle_udp(data)
 
@@ -216,12 +238,36 @@ class UdpServer(DatagramServer):
         logger.info("Processing, data=%s", repr(data))
 
         # Unittest
-        if self.ut_callback:
-            b = self.ut_callback(data)
+        if self.ut_incoming_callback:
+            b = self.ut_incoming_callback(data)
             if b:
                 # Unittest has requested processing stop
                 return
 
         # Parse
-        d = DNSRecord.parse(data)
-        logger.info("Got d=%s", d)
+        question_dns = DNSRecord.parse(data)
+        logger.info("Got question_dns=%s", repr(question_dns))
+
+        # Query
+        ms = SolBase.mscurrent()
+        response_bin = question_dns.send(
+            dest=self.ar_resolvers[0],
+            port=53,
+            tcp=False,
+            timeout=self.resolve_timeout_ms/1000.0,
+            ipv6=False,
+        )
+        logger.info("Got ms=%.2f, response_bin=%s", SolBase.msdiff(ms), repr(response_bin))
+
+        # Parse it
+        response_dns = DNSRecord.parse(response_bin)
+        logger.info("Got response_dns=%s", repr(response_dns))
+
+        # Unittest
+        if self.ut_outgoing_callback:
+            self.ut_outgoing_callback(response_bin)
+
+
+
+
+

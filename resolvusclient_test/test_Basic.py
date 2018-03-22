@@ -26,6 +26,7 @@ import socket
 import unittest
 
 import os
+from dnslib import DNSRecord
 from pysolbase.SolBase import SolBase
 from pysoltcp.tcpbase.TcpSocketManager import TcpSocketManager
 
@@ -49,14 +50,16 @@ class TestBasic(unittest.TestCase):
         self.udp_server = None
 
         # Receive udp and boolean to return (if True : stop processing)
-        self.ar_udp = list()
+        self.ar_udp_in = list()
+        self.ar_udp_out = list()
         self.udp_callback_stop_processing = True
 
     def tearDown(self):
         """
         Setup (called after each test)
         """
-        pass
+        if self.udp_server:
+            self._stop_server()
 
     def _start_server(self):
         """
@@ -67,7 +70,11 @@ class TestBasic(unittest.TestCase):
         self.assertIsNone(self.udp_server)
 
         # Alloc
-        self.udp_server = UdpServer(ut_callback=self._udp_callback)
+        self.udp_server = UdpServer(
+            ut_incoming_callback=self._udp_incoming_callback,
+            ut_outgoing_callback=self._udp_outgoing_callback,
+
+        )
 
         # Start
         self.udp_server.start()
@@ -92,7 +99,7 @@ class TestBasic(unittest.TestCase):
         # Reset
         self.udp_server = None
 
-    def _udp_callback(self, data):
+    def _udp_incoming_callback(self, data):
         """
         Callback
         :param data: bytes
@@ -101,12 +108,27 @@ class TestBasic(unittest.TestCase):
         :rtype bool
         """
 
-        if self.ar_udp is not None:
+        if self.ar_udp_in is not None:
             logger.info("callback (adding), data=%s", repr(data))
-            self.ar_udp.append(data)
+            self.ar_udp_in.append(data)
         else:
             logger.warning("callback (none), data=%s", repr(data))
         return self.udp_callback_stop_processing
+
+    def _udp_outgoing_callback(self, data):
+        """
+        Callback
+        :param data: bytes
+        :type data: bytes
+        :return True if processing is stopped by us
+        :rtype bool
+        """
+
+        if self.ar_udp_out is not None:
+            logger.info("callback (adding), data=%s", repr(data))
+            self.ar_udp_out.append(data)
+        else:
+            logger.warning("callback (none), data=%s", repr(data))
 
     @classmethod
     def _client_send(cls, buf):
@@ -138,7 +160,7 @@ class TestBasic(unittest.TestCase):
             # Send
             for j in range(0, 10):
                 # Reset
-                self.ar_udp = list()
+                self.ar_udp_in = list()
 
                 # Send
                 buf = "UDP_%s_%s" % (i, j)
@@ -149,14 +171,50 @@ class TestBasic(unittest.TestCase):
                 ms = SolBase.mscurrent()
                 while SolBase.msdiff(ms) < timeout_ms:
                     # Check
-                    if len(self.ar_udp) > 0:
+                    if len(self.ar_udp_in) > 0:
                         break
                     else:
                         SolBase.sleep(0)
 
                 # Check it
-                self.assertEqual(len(self.ar_udp), 1)
-                self.assertEqual(self.ar_udp[0], bin_buf)
+                self.assertEqual(len(self.ar_udp_in), 1)
+                self.assertEqual(self.ar_udp_in[0], bin_buf)
 
             # Stop
             self._stop_server()
+
+    def test_simple_resolving(self):
+        """
+        Test
+        """
+
+        # Process
+        self.udp_callback_stop_processing = False
+
+        # Start
+        self._start_server()
+
+        # Send basic resolving
+        question_dns = DNSRecord.question("knock.center")
+        logger.info("question_dns=%s", repr(question_dns))
+        question_bin = question_dns.pack()
+        logger.info("question_bin=%s", question_bin)
+        self._client_send(question_bin)
+
+        # Wait for processing
+        ms = SolBase.mscurrent()
+        while SolBase.msdiff(ms) < 20000:
+            # Check
+            if len(self.ar_udp_in) > 0 and len(self.ar_udp_out):
+                break
+            else:
+                SolBase.sleep(500)
+                logger.info("Waiting len in/out=%s/%s", len(self.ar_udp_in), len(self.ar_udp_out))
+
+        # Check it
+        self.assertEqual(len(self.ar_udp_in), 1)
+        self.assertEqual(self.ar_udp_in[0], question_bin)
+        self.assertEqual(len(self.ar_udp_out), 1)
+
+        # Stop
+        self._stop_server()
