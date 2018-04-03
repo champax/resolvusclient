@@ -40,25 +40,18 @@ class TcpServerContextFactory(TcpServerClientContextAbstractFactory):
     Default factory.
     """
 
-    def __init__(self, hello_timeout_ms=10000, ar_resolvers=None, resolve_timeout_ms=10000):
+    def __init__(self, ar_resolvers=None, resolve_timeout_ms=10000):
         """
         Constructor.
         :param ar_resolvers: List of resolver hosts
         :type ar_resolvers: list,None
-        :param hello_timeout_ms: Timeout in millis.
-        :type hello_timeout_ms: int
         """
-
-        # Timeout
-        self._hello_timeout_ms = hello_timeout_ms
 
         # Resolvers
         self.resolve_timeout_ms = resolve_timeout_ms
         self.ar_resolvers = ar_resolvers
         if not self.ar_resolvers:
             self.ar_resolvers = UdpServer.DEFAULT_RESOLVERS
-
-        logger.info("_hello_timeout_ms=%s, type=%s", self._hello_timeout_ms, SolBase.get_classname(self._hello_timeout_ms))
 
     def get_new_clientcontext(self, tcp_server, client_id, client_socket, client_addr):
         """
@@ -70,7 +63,6 @@ class TcpServerContextFactory(TcpServerClientContextAbstractFactory):
         :return Returned object MUST be a subclass of TcpServerClientContext.
         """
         new_client = TcpServerContext(tcp_server, client_id, client_socket, client_addr)
-        new_client._helloTimeOutMs = self._hello_timeout_ms
         new_client.ar_resolvers = self.ar_resolvers
         new_client.resolve_timeout_ms = self.resolve_timeout_ms
         return new_client

@@ -106,8 +106,7 @@ class TcpServerContext(TcpServerClientContext):
         # Stat
         Meters.aii("dnstcp.server.serverStartCount")
 
-        # Schedule an hello timeout
-        self._schedule_client_hello_timeout()
+        # Ok
         return True
 
     # =================================
@@ -122,9 +121,6 @@ class TcpServerContext(TcpServerClientContext):
 
         # Stat
         Meters.aii("dnstcp.server.serverStopSynchCount")
-
-        # Clean
-        self._unschedule_client_hello_timeout()
 
         # Called
         self.stop_synch_internalCalled = True
@@ -144,53 +140,6 @@ class TcpServerContext(TcpServerClientContext):
         return TcpServerClientContext.stop_synch(self)
 
     # =================================
-    # HELLO TIMEOUT SCHEDULE
-    # =================================
-
-    def _schedule_client_hello_timeout(self):
-        """
-        Schedule a ping timeout
-
-        """
-
-        with self._protocolLock:
-            # Check
-            if self._helloTimeOutGreenlet:
-                logger.warning("_helloTimeOutGreenlet is not None, killing")
-                Meters.aii("dnstcp.server.scheduleClientHelloTimeOutError")
-                self._unschedule_client_hello_timeout()
-                # Go
-            self._helloTimeOutGreenlet = gevent.spawn_later(self._helloTimeOutMs * 0.001, self._protocol_context_client_hello_timeout)
-
-    def _unschedule_client_hello_timeout(self):
-        """
-        Unschedule a ping
-
-        """
-        with self._protocolLock:
-            if self._helloTimeOutGreenlet:
-                self._helloTimeOutGreenlet.kill()
-                self._helloTimeOutGreenlet = None
-
-    def _protocol_context_client_hello_timeout(self):
-        """
-        Hello timeout
-
-        """
-
-        with self._protocolLock:
-            logger.error("timeout, fatal, disconnecting")
-
-            # Reset (we are called by it)
-            self._helloTimeOutGreenlet = None
-
-            # Stats
-            Meters.aii("dnstcp.server.clientHelloTimeOut")
-
-            # Disconnect ourselves (this is fatal)
-            self.stop_asynch()
-
-    # =================================
     # RECEIVE
     # =================================
 
@@ -203,10 +152,6 @@ class TcpServerContext(TcpServerClientContext):
 
         # Received something...
         logger.debug("binary_buffer=%s", binary_buffer)
-
-        # Unschedule and re-schedule (in case we receive something partial without anything else)
-        self._unschedule_client_hello_timeout()
-        self._schedule_client_hello_timeout()
 
         # Try it
         # Parse
@@ -232,11 +177,11 @@ class TcpServerContext(TcpServerClientContext):
         assert response_dns, "Need response_dns, got None"
         assert incomplete_buffer is None, "Need full parsing"
 
-        # Send back and wait (we are covered by hello timeout)
+        # Send back and wait (we are covered by tcp server absolute / relative timeouts)
         sb = SignaledBuffer()
         sb.binary_buffer = response_bin
         self.send_binary_to_socket_with_signal(sb)
         sb.send_event.wait()
 
-        # Close us async
+        # Close us async (this is over for us, tcp here is open/req/resp/close).
         self.stop_asynch()
