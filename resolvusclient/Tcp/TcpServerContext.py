@@ -153,12 +153,15 @@ class TcpServerContext(TcpServerClientContext):
         # Received something...
         logger.debug("binary_buffer=%s", binary_buffer)
 
-        # Try it
-        # Parse
-        question_dns, incomplete_buffer = DnsParser.try_parse_dns(None, binary_buffer)
+        # Parse question
+        question_dns, self.incomplete_buffer = DnsParser.try_parse_dns(self.incomplete_buffer, binary_buffer)
         logger.info("Got question_dns=%s", repr(question_dns))
-        assert question_dns, "Need question_dns, got None"
-        assert incomplete_buffer is None, "Need full parsing"
+        if question_dns is None:
+            assert self.incomplete_buffer is not None, "question_dns None, need incomplete_buffer"
+            # Cannot process now
+            return
+        else:
+            assert self.incomplete_buffer is None, "question_dns set, need incomplete_buffer None"
 
         # Query
         ms = SolBase.mscurrent()
@@ -183,5 +186,5 @@ class TcpServerContext(TcpServerClientContext):
         self.send_binary_to_socket_with_signal(sb)
         sb.send_event.wait()
 
-        # Close us async (this is over for us, tcp here is open/req/resp/close).
+        # Close us async (this is over for us, send is signaled, tcp here is open/req/resp/close).
         self.stop_asynch()
