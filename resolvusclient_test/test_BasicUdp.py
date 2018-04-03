@@ -36,7 +36,7 @@ SolBase.voodoo_init()
 logger = logging.getLogger(__name__)
 
 
-class TestBasic(unittest.TestCase):
+class TestBasicUdp(unittest.TestCase):
     """
     Test description
     """

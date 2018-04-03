@@ -26,11 +26,12 @@ import socket
 
 import gevent
 import os
-from dnslib import DNSRecord
 from gevent.server import DatagramServer
 from pysolbase.SolBase import SolBase
 from pysolmeters.Meters import Meters
 from pysoltcp.tcpbase.TcpSocketManager import TcpSocketManager
+
+from resolvusclient.Parser.DnsParser import DnsParser
 
 logger = logging.getLogger(__name__)
 
@@ -245,8 +246,10 @@ class UdpServer(DatagramServer):
                 return
 
         # Parse
-        question_dns = DNSRecord.parse(data)
+        question_dns, incomplete_buffer = DnsParser.try_parse_dns(None, data)
         logger.info("Got question_dns=%s", repr(question_dns))
+        assert question_dns, "Need question_dns, got None"
+        assert incomplete_buffer is None, "Need full parsing"
 
         # Query
         ms = SolBase.mscurrent()
@@ -260,8 +263,10 @@ class UdpServer(DatagramServer):
         logger.info("Got ms=%.2f, response_bin=%s", SolBase.msdiff(ms), repr(response_bin))
 
         # Parse it
-        response_dns = DNSRecord.parse(response_bin)
+        response_dns, incomplete_buffer = DnsParser.try_parse_dns(None, response_bin)
         logger.info("Got response_dns=%s", repr(response_dns))
+        assert response_dns, "Need response_dns, got None"
+        assert incomplete_buffer is None, "Need full parsing"
 
         # Unittest
         if self.ut_outgoing_callback:
